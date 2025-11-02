@@ -1,6 +1,10 @@
-# 🌍 World Clock & Time Converter
+# 🌍 Time Zone Converter
+
+
+[![Open in StackBlitz](https://developer.stackblitz.com/img/open_in_stackblitz.svg)](https://stackblitz.com/github/jennys107/timezone-converter)
 
 A modern, functional, visually immersive time zone converter designed for global teams and travelers. Features dynamic color-coded timelines that visualize day and night transitions in real-time.
+
 
 ![World Clock App](https://img.shields.io/badge/React-18.2.0-blue)
 ![Tailwind CSS](https://img.shields.io/badge/TailwindCSS-3.0-38B2AC)
@@ -56,38 +60,4 @@ npm run build
 
 The built files will be in the `dist/` directory.
 
-## 🎨 Usage
 
-1. **Add a Time Zone**: Click the `+` button and select a city
-2. **Create Views**: Organize zones into different views (Work, Travel, etc.)
-3. **Adjust Time**: Tap any card to expand the timeline slider
-4. **Pin Main Zone**: Swipe left and tap "Pin Main" to set reference time
-5. **Delete Zones**: Swipe left and tap "Delete" to remove zones
-
-## 📸 Screenshots
-
-### Blank State
-Clean interface prompting users to add their first time zone.
-
-### Active View
-Multiple time zones with dynamic gradients showing day/night cycles.
-
-### Timeline Slider
-Interactive 24-hour timeline with 15-minute increments.
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 👤 Author
-
-Your Name - [@yourhandle](https://twitter.com/yourhandle)
-
-## 🙏 Acknowledgments
-
-- Inspired by modern time zone converters
-- Built with love for global teams and travelers
