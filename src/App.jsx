@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Plus, Clock, Calendar, X, ChevronDown, Check, Pin } from 'lucide-react';
+import { Plus, Clock, Calendar, X, ChevronDown, Check, Pin, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const App = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState(new Date());
   const [selectedHour, setSelectedHour] = useState(20);
   const [selectedMinute, setSelectedMinute] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -11,21 +12,25 @@ const App = () => {
   const [showViewDropdown, setShowViewDropdown] = useState(false);
   const [showAddZone, setShowAddZone] = useState(false);
   const [showAddView, setShowAddView] = useState(false);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [showFullCalendar, setShowFullCalendar] = useState(false);
   const [newViewName, setNewViewName] = useState('');
   const [swipedCard, setSwipedCard] = useState(null);
   const [swipeOffset, setSwipeOffset] = useState(0);
   const [tooltipVisible, setTooltipVisible] = useState(false);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   const [tooltipData, setTooltipData] = useState({ time: '', date: '', dayOffset: 0 });
+  const [meetingTitle, setMeetingTitle] = useState('');
+  const [meetingDuration, setMeetingDuration] = useState(60);
   
   const timelineRefs = useRef({});
   const cardRefs = useRef({});
   const swipeStartX = useRef(0);
+  const dateScrollRef = useRef(null);
 
   const [currentView, setCurrentView] = useState('Work View');
   const [views, setViews] = useState(['Work View', 'Travel View', 'Family View']);
   const [mainZoneId, setMainZoneId] = useState(null);
-  
   const [timeZones, setTimeZones] = useState([]);
 
   const availableCities = [
@@ -45,6 +50,35 @@ const App = () => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
+
+  const generateDateRange = () => {
+    const dates = [];
+    const today = new Date();
+    for (let i = 0; i < 14; i++) {
+      const date = new Date(today);
+      date.setDate(today.getDate() + i);
+      dates.push(date);
+    }
+    return dates;
+  };
+
+  const generateCalendarGrid = () => {
+    const year = selectedDate.getFullYear();
+    const month = selectedDate.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days = [];
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(new Date(year, month, i));
+    }
+    return days;
+  };
 
   const getTimeForZone = (targetOffset, baseOffset, hour, minute) => {
     const diffHours = targetOffset - baseOffset;
@@ -93,7 +127,7 @@ const App = () => {
     
     setTooltipData({
       time: formatTime(displayHour, displayMinute),
-      date: 'Tue, Jan 18',
+      date: formatDate(selectedDate, dayOffset),
       dayOffset
     });
     setTooltipPosition({ x: e.clientX, y: rect.top - 10 });
@@ -126,7 +160,7 @@ const App = () => {
     
     setTooltipData({
       time: formatTime(displayHour, displayMinute),
-      date: 'Tue, Jan 18',
+      date: formatDate(selectedDate, dayOffset),
       dayOffset
     });
     setTooltipPosition({ x: touch.clientX, y: rect.top - 10 });
@@ -158,6 +192,7 @@ const App = () => {
 
   const resetToCurrentTime = () => {
     const now = new Date();
+    setSelectedDate(now);
     setSelectedHour(now.getHours());
     setSelectedMinute(Math.floor(now.getMinutes() / 15) * 15);
   };
@@ -166,6 +201,33 @@ const App = () => {
     const period = hour >= 12 ? 'pm' : 'am';
     const displayHour = hour % 12 || 12;
     return `${displayHour}:${minute.toString().padStart(2, '0')} ${period}`;
+  };
+
+  const formatDate = (date, dayOffset = 0) => {
+    const adjustedDate = new Date(date);
+    adjustedDate.setDate(adjustedDate.getDate() + dayOffset);
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return `${days[adjustedDate.getDay()]}, ${months[adjustedDate.getMonth()]} ${adjustedDate.getDate()}`;
+  };
+
+  const formatDateShort = (date) => {
+    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+    return days[date.getDay()];
+  };
+
+  const formatMonthYear = (date) => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  };
+
+  const isToday = (date) => {
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
+  const isSameDate = (date1, date2) => {
+    return date1.toDateString() === date2.toDateString();
   };
 
   const addTimeZone = (city) => {
@@ -217,7 +279,61 @@ const App = () => {
     return filtered[0];
   };
 
+  const openCalendarModal = () => {
+    setMeetingTitle('');
+    setMeetingDuration(60);
+    setShowCalendarModal(true);
+  };
+
+  const generateCalendarLinks = () => {
+    const mainZone = getMainZone();
+    if (!mainZone) return { google: '', outlook: '', apple: '' };
+
+    const startDateTime = new Date(selectedDate);
+    startDateTime.setHours(selectedHour, selectedMinute, 0, 0);
+    
+    const endDateTime = new Date(startDateTime);
+    endDateTime.setMinutes(endDateTime.getMinutes() + meetingDuration);
+
+    const formatForCalendar = (date) => {
+      return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    };
+
+    const title = meetingTitle || 'Meeting';
+    const timeZoneInfo = filteredZones.map(z => {
+      const { hour, minute } = getTimeForZone(z.offset, mainZone.offset, selectedHour, selectedMinute);
+      return `${z.city}: ${formatTime(hour, minute)}`;
+    }).join(' | ');
+    
+    const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${formatForCalendar(startDateTime)}/${formatForCalendar(endDateTime)}&details=${encodeURIComponent(timeZoneInfo)}`;
+    
+    const outlookUrl = `https://outlook.live.com/calendar/0/deeplink/compose?subject=${encodeURIComponent(title)}&startdt=${startDateTime.toISOString()}&enddt=${endDateTime.toISOString()}&body=${encodeURIComponent(timeZoneInfo)}`;
+    
+    const appleUrl = `data:text/calendar;charset=utf8,BEGIN:VCALENDAR%0AVERSION:2.0%0ABEGIN:VEVENT%0ADTSTART:${formatForCalendar(startDateTime)}%0ADTEND:${formatForCalendar(endDateTime)}%0ASUMMARY:${encodeURIComponent(title)}%0ADESCRIPTION:${encodeURIComponent(timeZoneInfo)}%0AEND:VEVENT%0AEND:VCALENDAR`;
+
+    return { google: googleUrl, outlook: outlookUrl, apple: appleUrl };
+  };
+
+  const scrollDateSelector = (direction) => {
+    if (dateScrollRef.current) {
+      const scrollAmount = 100;
+      dateScrollRef.current.scrollBy({
+        left: direction === 'left' ? -scrollAmount : scrollAmount,
+        behavior: 'smooth'
+      });
+    }
+  };
+
+  const changeMonth = (direction) => {
+    const newDate = new Date(selectedDate);
+    newDate.setMonth(newDate.getMonth() + direction);
+    setSelectedDate(newDate);
+  };
+
   const filteredZones = timeZones.filter(z => z.view === currentView);
+  const dateRange = generateDateRange();
+  const calendarGrid = generateCalendarGrid();
+  const calendarLinks = generateCalendarLinks();
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 text-white font-sans pb-32">
@@ -231,14 +347,7 @@ const App = () => {
           }}
         >
           <div className="text-sm font-semibold">{tooltipData.time}</div>
-          <div className="text-xs text-gray-400">
-            {tooltipData.date}
-            {tooltipData.dayOffset !== 0 && (
-              <span className="ml-2 text-xs bg-white/20 px-1.5 py-0.5 rounded">
-                {tooltipData.dayOffset > 0 ? '+1' : '-1'}
-              </span>
-            )}
-          </div>
+          <div className="text-xs text-gray-400">{tooltipData.date}</div>
         </div>
       )}
 
@@ -387,7 +496,7 @@ const App = () => {
                         {formatTime(localHour, localMinute)}
                       </div>
                       <p className="text-white/80">
-                        Tue, Jan 18
+                        {formatDate(selectedDate, dayOffset)}
                         {dayOffset !== 0 && (
                           <span className="ml-2 text-sm bg-white/20 px-2 py-0.5 rounded">
                             {dayOffset > 0 ? '+1' : '-1'}
@@ -396,6 +505,75 @@ const App = () => {
                       </p>
                     </div>
                   </div>
+
+                  {isExpanded && (
+                    <div className="mt-4 mb-2">
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            scrollDateSelector('left');
+                          }}
+                          className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition flex-shrink-0"
+                        >
+                          <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        
+                        <div 
+                          ref={dateScrollRef}
+                          className="flex-1 flex gap-2 overflow-x-auto scrollbar-hide scroll-smooth"
+                          style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+                        >
+                          {dateRange.map((date, index) => {
+                            const isSelected = isSameDate(date, selectedDate);
+                            const isTodayDate = isToday(date);
+                            
+                            return (
+                              <button
+                                key={index}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedDate(date);
+                                }}
+                                className={`flex-shrink-0 flex flex-col items-center justify-center w-14 h-16 rounded-xl transition ${
+                                  isSelected 
+                                    ? 'bg-white text-slate-900' 
+                                    : 'bg-white/20 hover:bg-white/30'
+                                }`}
+                              >
+                                <span className="text-xs font-medium">{formatDateShort(date)}</span>
+                                <span className="text-lg font-bold">{date.getDate()}</span>
+                                {isTodayDate && !isSelected && (
+                                  <div className="w-1 h-1 rounded-full bg-white mt-1"></div>
+                                )}
+                              </button>
+                            );
+                          })}
+                          
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowFullCalendar(true);
+                            }}
+                            className="flex-shrink-0 flex flex-col items-center justify-center w-14 h-16 rounded-xl bg-white/20 hover:bg-white/30 transition"
+                          >
+                            <Calendar className="w-5 h-5" />
+                            <span className="text-xs mt-1">More</span>
+                          </button>
+                        </div>
+
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            scrollDateSelector('right');
+                          }}
+                          className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center hover:bg-white/30 transition flex-shrink-0"
+                        >
+                          <ChevronRight className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {isExpanded && (
                     <div 
@@ -462,7 +640,10 @@ const App = () => {
             <Clock className="w-5 h-5" />
             <span className="font-semibold">Current Time</span>
           </button>
-          <button className="flex-1 bg-indigo-600/80 backdrop-blur-xl rounded-full py-4 px-6 flex items-center justify-center gap-3 hover:bg-indigo-500/80 transition shadow-xl">
+          <button 
+            onClick={openCalendarModal}
+            className="flex-1 bg-indigo-600/80 backdrop-blur-xl rounded-full py-4 px-6 flex items-center justify-center gap-3 hover:bg-indigo-500/80 transition shadow-xl"
+          >
             <Plus className="w-5 h-5" />
             <span className="font-semibold">Add to Calendar</span>
           </button>
@@ -546,6 +727,182 @@ const App = () => {
             {newViewName.trim() && views.includes(newViewName.trim()) && (
               <p className="text-red-400 text-sm mt-2">This view name already exists</p>
             )}
+          </div>
+        </div>
+      )}
+
+      {showCalendarModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-slate-800 rounded-3xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold">Add to Calendar</h3>
+              <button 
+                onClick={() => setShowCalendarModal(false)}
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-400 mb-2">Selected Time</p>
+              <div className="bg-slate-700 rounded-xl p-4">
+                <div className="text-lg font-semibold">{formatTime(selectedHour, selectedMinute)}</div>
+                <div className="text-sm text-gray-400">{formatDate(selectedDate)}</div>
+              </div>
+            </div>
+
+            <div className="mb-4">
+              <p className="text-sm text-gray-400 mb-2">All Time Zones</p>
+              <div className="bg-slate-700 rounded-xl p-4 space-y-2 max-h-32 overflow-y-auto">
+                {filteredZones.map((zone) => {
+                  const mainZone = getMainZone();
+                  const { hour, minute } = zone.id === mainZone.id 
+                    ? { hour: selectedHour, minute: selectedMinute }
+                    : getTimeForZone(zone.offset, mainZone.offset, selectedHour, selectedMinute);
+                  return (
+                    <div key={zone.id} className="flex justify-between text-sm">
+                      <span>{zone.city}</span>
+                      <span className="text-gray-400">{formatTime(hour, minute)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <input
+              type="text"
+              value={meetingTitle}
+              onChange={(e) => setMeetingTitle(e.target.value)}
+              placeholder="Meeting title (optional)"
+              className="w-full bg-slate-700 rounded-xl px-4 py-3 mb-4 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            />
+
+            <div className="mb-6">
+              <label className="text-sm text-gray-400 mb-2 block">Duration</label>
+              <div className="flex gap-2">
+                {[30, 60, 90, 120].map((duration) => (
+                  <button
+                    key={duration}
+                    onClick={() => setMeetingDuration(duration)}
+                    className={`flex-1 py-2 rounded-lg transition ${
+                      meetingDuration === duration
+                        ? 'bg-purple-500 text-white'
+                        : 'bg-slate-700 hover:bg-slate-600'
+                    }`}
+                  >
+                    {duration}m
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <p className="text-sm text-gray-400 mb-4">Choose your calendar app:</p>
+            
+            <div className="space-y-3">
+              <a
+                href={calendarLinks.google}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl py-3 px-4 flex items-center justify-center gap-3 hover:from-blue-600 hover:to-blue-700 transition"
+              >
+                <Calendar className="w-5 h-5" />
+                <span className="font-semibold">Google Calendar</span>
+              </a>
+              
+              <a
+                href={calendarLinks.outlook}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full bg-gradient-to-r from-cyan-500 to-cyan-600 rounded-xl py-3 px-4 flex items-center justify-center gap-3 hover:from-cyan-600 hover:to-cyan-700 transition"
+              >
+                <Calendar className="w-5 h-5" />
+                <span className="font-semibold">Outlook Calendar</span>
+              </a>
+              
+              <a
+                href={calendarLinks.apple}
+                download="meeting.ics"
+                className="w-full bg-gradient-to-r from-slate-600 to-slate-700 rounded-xl py-3 px-4 flex items-center justify-center gap-3 hover:from-slate-700 hover:to-slate-800 transition"
+              >
+                <Calendar className="w-5 h-5" />
+                <span className="font-semibold">Apple Calendar</span>
+              </a>
+            </div>
+
+            <p className="text-xs text-gray-500 mt-4 text-center">
+              Time zones and daylight savings automatically handled
+            </p>
+          </div>
+        </div>
+      )}
+
+      {showFullCalendar && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-6 z-50">
+          <div className="bg-slate-800 rounded-3xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-2xl font-bold">{formatMonthYear(selectedDate)}</h3>
+              <button 
+                onClick={() => setShowFullCalendar(false)}
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between mb-4">
+              <button
+                onClick={() => changeMonth(-1)}
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition"
+              >
+                <ChevronLeft className="w-5 h-5" />
+              </button>
+              <span className="font-semibold">{formatMonthYear(selectedDate)}</span>
+              <button
+                onClick={() => changeMonth(1)}
+                className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition"
+              >
+                <ChevronRight className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-7 gap-2 mb-2">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day) => (
+                <div key={day} className="text-center text-xs text-gray-400 font-medium">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-7 gap-2">
+              {calendarGrid.map((date, index) => {
+                if (!date) {
+                  return <div key={index} className="aspect-square"></div>;
+                }
+                
+                const isSelected = isSameDate(date, selectedDate);
+                const isTodayDate = isToday(date);
+                
+                return (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      setSelectedDate(date);
+                      setShowFullCalendar(false);
+                    }}
+                    className={`aspect-square rounded-lg flex items-center justify-center text-sm transition ${
+                      isSelected
+                        ? 'bg-purple-500 text-white font-bold'
+                        : isTodayDate
+                        ? 'bg-white/20 font-semibold'
+                        : 'hover:bg-white/10'
+                    }`}
+                  >
+                    {date.getDate()}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       )}
